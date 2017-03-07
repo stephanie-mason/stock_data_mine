@@ -44,9 +44,12 @@ class Assignment3 {
 
 
       //Main functions called here
-      firstQuery();
+      //firstQuery();
       createTable();
+      updateTable("lalala");
 
+
+      determineTradingInterval("Telecommunications Services");
 
 
       connRead.close();
@@ -72,23 +75,11 @@ class Assignment3 {
     " order by TickerCnt DESC, Industry; ");
     ResultSet rs = pstmt.executeQuery();
     while (rs.next()) {
-      System.out.printf(rs.getString(1) + rs.getString(2) + "%n");
+      //System.out.printf(rs.getString(1) + rs.getString(2) + "%n");
     }
     pstmt.close();
 
-    pstmt = connRead.prepareStatement(
-    "select Ticker, min(TransDate), max(TransDate)," +
-    " count(distinct TransDate) as TradingDays" +
-    " from Company natural join PriceVolume" +
-    " where Industry = 'Telecommunications Services'" +
-    " and TransDate >= '2005.02.09' and TransDate <= '2014.08.18'" +
-    " group by Ticker" +
-    " having TradingDays >= 150" +
-    " order by Ticker; ");
-    rs = pstmt.executeQuery();
-    while (rs.next()) {
-    }
-    pstmt.close();
+
 
     pstmt = connRead.prepareStatement(
     "select P.TransDate, P.openPrice, P.closePrice" +
@@ -101,7 +92,7 @@ class Assignment3 {
   }
 
   /*============================================================================/*
-
+  Create a performance table and populate with necessary relations
   /*============================================================================*/
   static void createTable() throws SQLException {
     PreparedStatement pstmt = connWrite.prepareStatement(
@@ -118,4 +109,63 @@ class Assignment3 {
     pstmt.executeUpdate();
     pstmt.close();
   }
+
+  /*============================================================================/*
+  inserting into tables...
+  /*============================================================================*/
+  static void updateTable(String something) throws SQLException {
+    PreparedStatement pstmt;
+
+
+    //for each in some list...
+    pstmt = connWrite.prepareStatement(
+      "insert into Performance (Industry) values('" + something + "');");
+    pstmt.executeUpdate();
+    pstmt.close();
+  }
+
+  /*============================================================================/*
+   determineTradingInterval
+   Within a given industry, finds the appropriate trading interval.
+   Intervals must satisfy the following condition:
+   * Be >= 150 days
+   * Begin on the date of the newest Ticker (max(min(TransDate))
+   * End on the earliest date available across tickers (min(max(TransDate))
+
+   Tickers with less than 150 days are not included in the interval comparison
+  /*============================================================================*/
+
+  static void determineTradingInterval(String industry) throws SQLException {
+    PreparedStatement pstmt;
+
+    pstmt = connRead.prepareStatement(
+    "select Ticker, min(TransDate), max(TransDate)," +
+    " count(distinct TransDate) as TradingDays" +
+    " from Company natural join PriceVolume" +
+    " where Industry = '" + industry + "'" +
+    " and TransDate >= " +
+    "  (select min(TransDate) as minDate" +
+    "  from Company natural left outer join PriceVolume" +
+    "  where Industry = '" + industry + "'" +
+    "  group by Ticker" +
+    "  order by minDate desc" +
+    "  limit 1)" +
+    " and TransDate <= " +
+    "  (select max(TransDate) as maxDate" +
+    "  from Company natural left outer join PriceVolume" +
+    "  where Industry = '" + industry + "' and TransDate is not null" +
+    "  group by Ticker" +
+    "  order by maxDate asc" +
+    "  limit 1) " +
+    " group by Ticker " +
+    " having TradingDays >= 150 " +
+    " order by Ticker; ");
+    ResultSet rs = pstmt.executeQuery();
+    while (rs.next()) {
+      System.out.printf(rs.getString(1) + "   " +  rs.getString(2) + "   " +  rs.getString(3)  + "   " +  rs.getString(4) + "%n");
+    }
+    pstmt.close();
+  }
+
+
 }
