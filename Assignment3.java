@@ -41,6 +41,14 @@ class Assignment3 {
       System.out.printf("Writer connection established.%n",
       dburl, username);
 
+
+
+      //Main functions called here
+      firstQuery();
+      createTable();
+
+
+
       connRead.close();
       connWrite.close();
       System.out.printf("All connections closed.%n");
@@ -56,20 +64,58 @@ class Assignment3 {
   /*============================================================================/*
 
   /*============================================================================*/
-  static boolean firstQuery(String ticker) throws SQLException {
+  static void firstQuery() throws SQLException {
     PreparedStatement pstmt = connRead.prepareStatement(
-    "select Name " +
-    " from Company " +
-    " where Ticker = ?");
-    pstmt.setString(1, ticker);
+    "select Industry, count(distinct Ticker) as TickerCnt " +
+    " from Company natural join PriceVolume" +
+    " group by Industry " +
+    " order by TickerCnt DESC, Industry; ");
     ResultSet rs = pstmt.executeQuery();
-
-    if (rs.next()) {
-      System.out.printf(rs.getString(1) + "%n");
-      return true;
-    } else {
-      System.out.printf("%s not found in database.%n", ticker);
-      return false;
+    while (rs.next()) {
+      System.out.printf(rs.getString(1) + rs.getString(2) + "%n");
     }
+    pstmt.close();
+
+    pstmt = connRead.prepareStatement(
+    "select Ticker, min(TransDate), max(TransDate)," +
+    " count(distinct TransDate) as TradingDays" +
+    " from Company natural join PriceVolume" +
+    " where Industry = 'Telecommunications Services'" +
+    " and TransDate >= '2005.02.09' and TransDate <= '2014.08.18'" +
+    " group by Ticker" +
+    " having TradingDays >= 150" +
+    " order by Ticker; ");
+    rs = pstmt.executeQuery();
+    while (rs.next()) {
+    }
+    pstmt.close();
+
+    pstmt = connRead.prepareStatement(
+    "select P.TransDate, P.openPrice, P.closePrice" +
+    " from PriceVolume P" +
+    " where Ticker = 'AMT' and TransDate >= '2005.02.09'" +
+    " and TransDate <= '2014.08.18'; " );
+    rs = pstmt.executeQuery();
+    while (rs.next()) {
+    }
+  }
+
+  /*============================================================================/*
+
+  /*============================================================================*/
+  static void createTable() throws SQLException {
+    PreparedStatement pstmt = connWrite.prepareStatement(
+    "drop table if exists Performance;");
+    pstmt.executeUpdate();
+
+    pstmt = connWrite.prepareStatement(
+    "create table Performance (" +
+    " Industry CHAR(30)," +
+    " Ticker CHAR(6)," +
+    " EndDate CHAR(10)," +
+    " TickerReturn CHAR(12)," +
+    " IndustryReturn CHAR(12));" );
+    pstmt.executeUpdate();
+    pstmt.close();
   }
 }
