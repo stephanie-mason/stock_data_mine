@@ -21,6 +21,8 @@ class Assignment3 {
     String readParamsFile = "readerparams.txt";
     String writeParamsFile = "writerparams.txt";
     Properties connectProps = new Properties();
+    ArrayList<String> industryList = new ArrayList<String>();
+
 
     try {
       //Connect to the read database
@@ -44,13 +46,19 @@ class Assignment3 {
 
 
       //Main functions called here
-      //firstQuery();
-      createTable();
-      updateTable("lalala");
+      industryList = getIndustries();
+      //createTable();
+      //updateTable("lalala");
 
+      /*
+      for(int i = 0; i < 2; i++) {
+        String currIndustry = industryList.get(i);
+        System.out.printf("Processing " + currIndustry + "%n");
+        determineTradingInterval(currIndustry);
+      }
+      */
 
       determineTradingInterval("Telecommunications Services");
-
 
       connRead.close();
       connWrite.close();
@@ -67,28 +75,28 @@ class Assignment3 {
   /*============================================================================/*
 
   /*============================================================================*/
-  static void firstQuery() throws SQLException {
-    PreparedStatement pstmt = connRead.prepareStatement(
-    "select Industry, count(distinct Ticker) as TickerCnt " +
-    " from Company natural join PriceVolume" +
-    " group by Industry " +
-    " order by TickerCnt DESC, Industry; ");
+  static ArrayList<String> getIndustries() throws SQLException {
+    PreparedStatement pstmt;
+    ArrayList<String> buildList = new ArrayList<String>();
+
+    pstmt = connRead.prepareStatement(
+    "select distinct Industry" +
+    " from Company" +
+    " order by Industry; ");
     ResultSet rs = pstmt.executeQuery();
+
+    rs.last();
+    int numIndustries = rs.getRow();
+    System.out.printf("%d industries found %n", numIndustries);
+
+    rs.beforeFirst();
     while (rs.next()) {
-      //System.out.printf(rs.getString(1) + rs.getString(2) + "%n");
+      String currString = rs.getString(1);
+      buildList.add(currString);
     }
     pstmt.close();
 
-
-
-    pstmt = connRead.prepareStatement(
-    "select P.TransDate, P.openPrice, P.closePrice" +
-    " from PriceVolume P" +
-    " where Ticker = 'AMT' and TransDate >= '2005.02.09'" +
-    " and TransDate <= '2014.08.18'; " );
-    rs = pstmt.executeQuery();
-    while (rs.next()) {
-    }
+    return buildList;
   }
 
   /*============================================================================/*
@@ -126,6 +134,7 @@ class Assignment3 {
 
   /*============================================================================/*
    determineTradingInterval
+
    Within a given industry, finds the appropriate trading interval.
    Intervals must satisfy the following condition:
    * Be >= 150 days
@@ -134,9 +143,12 @@ class Assignment3 {
 
    Tickers with less than 150 days are not included in the interval comparison
   /*============================================================================*/
-
   static void determineTradingInterval(String industry) throws SQLException {
     PreparedStatement pstmt;
+    String ticker = null;
+    String earliestDate = null;
+    String latestDate = null;
+    Double numTradeDays = null;
 
     pstmt = connRead.prepareStatement(
     "select Ticker, min(TransDate), max(TransDate)," +
@@ -159,13 +171,76 @@ class Assignment3 {
     "  limit 1) " +
     " group by Ticker " +
     " having TradingDays >= 150 " +
-    " order by Ticker; ");
+    " order by Ticker;  ");
     ResultSet rs = pstmt.executeQuery();
+
+
+    // Get data from the first in the list
+    rs.next();
+    ticker = rs.getString(1);
+    earliestDate = rs.getString(2);
+    latestDate = rs.getString(3);
+    numTradeDays = Double.parseDouble(rs.getString(4));
+
+    // Get total number of tickers
+    int numTickers = 1;
     while (rs.next()) {
-      System.out.printf(rs.getString(1) + "   " +  rs.getString(2) + "   " +  rs.getString(3)  + "   " +  rs.getString(4) + "%n");
+      numTickers++;
     }
     pstmt.close();
+
+    System.out.printf("%d accepted tickers for %s(%s - %s), %.2f   common dates%n",
+      numTickers, industry, earliestDate, latestDate, numTradeDays);
+
+    double numTradeIntervals = Math.floor((numTradeDays)/60);
+    System.out.printf("Intervals: %.2f  %n", numTradeIntervals);
+
+    getIntervalDates(ticker, earliestDate, latestDate, numTradeIntervals);
+
   }
 
+  /*============================================================================/*
+   getIntervalDates
 
+   Uses the first ticker (given as input) in an industry to find the 60 day
+   interval start and end dates
+  /*============================================================================*/
+  static void getIntervalDates(String ticker, String earliestDate, String latestDate, Double numTradeIntervals) throws SQLException {
+    PreparedStatement pstmt;
+    ArrayList<String> startDates = new ArrayList<String>();
+    ArrayList<String> endDates = new ArrayList<String>();
+
+    pstmt = connRead.prepareStatement(
+    "select P.TransDate, P.openPrice, P.closePrice" +
+    " from PriceVolume P" +
+    " where Ticker = '" + ticker + "' and TransDate >= '" + earliestDate + "'" +
+    " and TransDate <= '" + latestDate + "';");
+
+    ResultSet rs = pstmt.executeQuery();
+
+    int dayCount = 1;
+    int intervalCount = 0;
+
+    System.out.println("INTERVAL     DAY      START     DAY NUM     END");
+
+    while (rs.next()){
+      String currDate = rs.getString(1);
+
+      if(intervalCount < numTradeIntervals) {
+        if((dayCount-1)%60 == 0) {
+          startDates.add(currDate);
+          //System.out.printf("%d              %d", intervalCount+1, dayCount);
+        }
+
+        if(dayCount%60 == 0) {
+          endDates.add(currDate);
+          //System.out.printf("        %s          %d          %s%n", startDates.get(intervalCount), dayCount, endDates.get(intervalCount));
+          intervalCount++;
+        }
+
+        dayCount++;
+      }
+
+    }
+  }
 }
